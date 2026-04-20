@@ -13,3 +13,26 @@ slurm_logs/
 
 # mac
 .DS_Store
+
+# datasets
+results/
+*.npz
+
+# reservoir heavy files
+*.UNRST
+*.INIT
+*.EGRID
+*.SMSPEC
+*.UNSMRY
+*.DBG
+*.PRT
+
+# logs
+*.log
+slurm_logs/
+
+# mac
+.DS_Store
+
+# misc large
+*.pptx
