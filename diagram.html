@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Numerical Simulation vs FNO</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #0d1117;
+    color: #e0e0e0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 30px 20px;
+    gap: 28px;
+  }
+
+  h1 {
+    font-size: 1rem;
+    color: #555;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  /* ── Row (one pipeline) ── */
+  .pipeline {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+    max-width: 900px;
+  }
+
+  /* ── Box ── */
+  .box {
+    border-radius: 12px;
+    padding: 18px 20px;
+    min-width: 190px;
+    flex: 1;
+  }
+
+  .box-label {
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    font-weight: 700;
+  }
+
+  .box-title {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+
+  .items {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .item {
+    font-size: 0.78rem;
+    padding: 5px 10px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    line-height: 1.35;
+  }
+
+  .item-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ── Arrow ── */
+  .arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 52px;
+    gap: 3px;
+  }
+  .arrow-line {
+    height: 2px;
+    width: 36px;
+    border-radius: 2px;
+  }
+  .arrow-head {
+    width: 0; height: 0;
+    border-top: 7px solid transparent;
+    border-bottom: 7px solid transparent;
+    margin-left: 24px;
+    margin-top: -9px;
+  }
+  .arrow-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 6px;
+    text-align: center;
+  }
+
+  /* ── Divider ── */
+  .divider {
+    width: 100%;
+    max-width: 900px;
+    border: none;
+    border-top: 1px dashed #2a3050;
+  }
+
+  /* ── Colour themes ── */
+
+  /* Numerical sim */
+  .ns-input  { background: #0e1e35; border: 1px solid #1e4a6e; }
+  .ns-input .box-label  { color: #4a9fd4; }
+  .ns-input .box-title  { color: #7ec8f7; }
+  .ns-input .item       { background: #0a1828; color: #a0c8e8; }
+  .ns-input .item-dot   { background: #4a9fd4; }
+
+  .ns-process { background: #0a1f0a; border: 1px solid #1a5c1a; }
+  .ns-process .box-label { color: #4caf50; }
+  .ns-process .box-title { color: #80e080; }
+  .ns-process .item      { background: #071407; color: #90cc90; }
+  .ns-process .item-dot  { background: #4caf50; }
+
+  .ns-output { background: #1e1400; border: 1px solid #5a4000; }
+  .ns-output .box-label  { color: #d4a030; }
+  .ns-output .box-title  { color: #f0c060; }
+  .ns-output .item       { background: #120e00; color: #c8a060; }
+  .ns-output .item-dot   { background: #d4a030; }
+
+  .ns-arrow .arrow-line  { background: #3a5070; }
+  .ns-arrow .arrow-head  { border-left: 10px solid #3a5070; }
+  .ns-arrow .arrow-label { color: #3a5070; }
+
+  /* FNO */
+  .fno-input  { background: #1a0a2e; border: 1px solid #5a2090; }
+  .fno-input .box-label  { color: #a060e0; }
+  .fno-input .box-title  { color: #c090ff; }
+  .fno-input .item       { background: #100620; color: #9070c0; }
+  .fno-input .item-dot   { background: #a060e0; }
+
+  .fno-process { background: #1e0a14; border: 1px solid #802040; }
+  .fno-process .box-label { color: #e05080; }
+  .fno-process .box-title { color: #ff80a0; }
+  .fno-process .item      { background: #120008; color: #c06080; }
+  .fno-process .item-dot  { background: #e05080; }
+
+  .fno-output { background: #1e1400; border: 1px solid #5a4000; }
+  .fno-output .box-label  { color: #d4a030; }
+  .fno-output .box-title  { color: #f0c060; }
+  .fno-output .item       { background: #120e00; color: #c8a060; }
+  .fno-output .item-dot   { background: #d4a030; }
+
+  .fno-arrow .arrow-line  { background: #4a2060; }
+  .fno-arrow .arrow-head  { border-left: 10px solid #4a2060; }
+  .fno-arrow .arrow-label { color: #4a2060; }
+
+  /* ── Row title ── */
+  .row-title {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .row-title-text {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .row-title-line {
+    flex: 1;
+    height: 1px;
+    background: #2a3050;
+  }
+  .badge {
+    font-size: 0.65rem;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  /* ── Replace arrow (between pipelines) ── */
+  .replace-block {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    max-width: 900px;
+    width: 100%;
+    justify-content: center;
+  }
+  .replace-line { flex: 1; height: 1px; background: #2a3050; }
+  .replace-text {
+    font-size: 0.7rem;
+    color: #3a4060;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border: 1px solid #2a3050;
+    border-radius: 20px;
+    padding: 3px 14px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Numerical Simulation &nbsp;vs&nbsp; Machine Learning (FNO)</h1>
+
+<!-- ── Numerical Simulation ── -->
+<div class="row-title">
+  <div class="row-title-text" style="color:#7ec8f7">Numerical Simulation</div>
+  <div class="row-title-line"></div>
+  <div class="badge" style="background:#0e1e35;color:#4a9fd4;border:1px solid #1e4a6e">OPM Flow · Slow · Hours per run</div>
+</div>
+
+<div class="pipeline">
+
+  <!-- Input -->
+  <div class="box ns-input">
+    <div class="box-label">Input</div>
+    <div class="box-title">Rock & Fluid Data</div>
+    <div class="items">
+      <div class="item"><div class="item-dot"></div>Kx, Ky, Kz — permeability field</div>
+      <div class="item"><div class="item-dot"></div>φ — porosity field</div>
+      <div class="item"><div class="item-dot"></div>Well locations &amp; injection rate</div>
+      <div class="item"><div class="item-dot"></div>Fluid properties (viscosity, density)</div>
+      <div class="item"><div class="item-dot"></div>Initial pressure &amp; saturations</div>
+    </div>
+  </div>
+
+  <!-- Arrow 1 -->
+  <div class="arrow ns-arrow">
+    <div style="display:flex;align-items:center">
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-label">feeds</div>
+  </div>
+
+  <!-- Process -->
+  <div class="box ns-process">
+    <div class="box-label">Process</div>
+    <div class="box-title">Solve Physics Equations</div>
+    <div class="items">
+      <div class="item"><div class="item-dot"></div>Darcy's law at every cell</div>
+      <div class="item"><div class="item-dot"></div>Pressure equation ∇·(K∇p) = q</div>
+      <div class="item"><div class="item-dot"></div>Saturation equation ∂Sw/∂t</div>
+      <div class="item"><div class="item-dot"></div>1,122,000 cells × 33 time steps</div>
+    </div>
+  </div>
+
+  <!-- Arrow 2 -->
+  <div class="arrow ns-arrow">
+    <div style="display:flex;align-items:center">
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-label">produces</div>
+  </div>
+
+  <!-- Output -->
+  <div class="box ns-output">
+    <div class="box-label">Output</div>
+    <div class="box-title">Full Field Results</div>
+    <div class="items">
+      <div class="item"><div class="item-dot"></div>vx, vy — velocity fields</div>
+      <div class="item"><div class="item-dot"></div>p — pressure field</div>
+      <div class="item"><div class="item-dot"></div>Sw — water saturation field</div>
+      <div class="item"><div class="item-dot"></div>Oil rate, water cut per well</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Replace label -->
+<div class="replace-block">
+  <div class="replace-line"></div>
+  <div class="replace-text">↓ &nbsp; FNO replaces the expensive process above &nbsp; ↓</div>
+  <div class="replace-line"></div>
+</div>
+
+<!-- ── FNO ── -->
+<div class="row-title">
+  <div class="row-title-text" style="color:#c090ff">ML Model</div>
+  <div class="row-title-line"></div>
+  <div class="badge" style="background:#1a0a2e;color:#a060e0;border:1px solid #5a2090">FNO · Fast · Milliseconds per run</div>
+</div>
+
+<div class="pipeline">
+
+  <!-- Input -->
+  <div class="box fno-input">
+    <div class="box-label">Input</div>
+    <div class="box-title">Permeability + Coords</div>
+    <div class="items">
+      <div class="item"><div class="item-dot"></div>log(Kx) — log permeability X</div>
+      <div class="item"><div class="item-dot"></div>log(Ky) — log permeability Y</div>
+      <div class="item"><div class="item-dot"></div>x — cell coordinate grid</div>
+      <div class="item"><div class="item-dot"></div>y — cell coordinate grid</div>
+      <div class="item" style="opacity:0.5"><div class="item-dot"></div>φ — porosity (optional)</div>
+    </div>
+  </div>
+
+  <!-- Arrow 1 -->
+  <div class="arrow fno-arrow">
+    <div style="display:flex;align-items:center">
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-label">feeds</div>
+  </div>
+
+  <!-- Process -->
+  <div class="box fno-process">
+    <div class="box-label">Process</div>
+    <div class="box-title">Learned Mapping</div>
+    <div class="items">
+      <div class="item"><div class="item-dot"></div>Lift input to feature space</div>
+      <div class="item"><div class="item-dot"></div>Fourier transform → frequency domain</div>
+      <div class="item"><div class="item-dot"></div>Learn global patterns in freq space</div>
+      <div class="item"><div class="item-dot"></div>Inverse Fourier → back to space</div>
+    </div>
+  </div>
+
+  <!-- Arrow 2 -->
+  <div class="arrow fno-arrow">
+    <div style="display:flex;align-items:center">
+      <div class="arrow-line"></div>
+      <div class="arrow-head"></div>
+    </div>
+    <div class="arrow-label">predicts</div>
+  </div>
+
+  <!-- Output -->
+  <div class="box fno-output">
+    <div class="box-label">Output</div>
+    <div class="box-title">Velocity Fields</div>
+    <div class="items">
+      <div class="item"><div class="item-dot"></div>vx — velocity in X direction</div>
+      <div class="item"><div class="item-dot"></div>vy — velocity in Y direction</div>
+      <div class="item" style="opacity:0.5"><div class="item-dot"></div>p — pressure (optional)</div>
+      <div class="item" style="color:#555;font-style:italic;background:none;padding-left:0;margin-top:4px">
+        <div class="item-dot" style="background:transparent"></div>
+        Same shape as input: 60×220
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Footer note -->
+<div style="font-size:0.7rem;color:#2a3050;text-align:center;max-width:700px;line-height:1.6">
+  Training: run OPM Flow once on all 85 layers × 33 time steps to generate ground truth vx, vy fields.
+  Then train the FNO to map (Kx, Ky, x, y) → (vx, vy) from those results.
+  After training, the FNO predicts in milliseconds — no simulator needed.
+</div>
+
+</body>
+</html>

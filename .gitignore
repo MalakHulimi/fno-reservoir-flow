@@ -1,0 +1,15 @@
+# heavy reservoir files
+*.UNRST
+*.INIT
+*.EGRID
+*.SMSPEC
+*.UNSMRY
+*.DBG
+*.PRT
+
+# logs
+*.log
+slurm_logs/
+
+# mac
+.DS_Store

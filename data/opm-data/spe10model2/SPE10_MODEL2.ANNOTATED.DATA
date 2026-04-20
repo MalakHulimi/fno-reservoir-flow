@@ -1,0 +1,366 @@
+-- This reservoir simulation is made available under the open Database 
+-- License: http://opendatacommons.org/licenses/odbl/1.0/
+-- Individual contents of the database are licensed under the Database contents
+-- License : http://opendatacommons.org/licenses/dbcl/1.0/
+
+
+
+-- Copyright(C) 2015 Statoil
+
+
+
+-- ===============================================================================
+-- SPE 10 - MODEL 2
+-- Simulation based on the followinf SPE paper:
+-- "Tenth SPE comparative solution project: a comparison of upscaling techniques"
+-- By Mike Christie (Heriot-Wat University) and Martin Blunt (Imperial College)
+-- SPE, August 2001
+-- ===============================================================================
+
+
+RUNSPEC
+
+TITLE
+    TENTH SPE COMPARATIVE SOLUTION PROJECT: A COMPARISON OF UPSCALING TECHNIQUES - MODEL 2
+
+DIMENS
+
+ 60  220  85  /
+
+NONNC
+
+
+OIL
+
+WATER
+
+GAS
+
+
+FIELD
+
+EQLDIMS
+  /
+
+TABDIMS
+  /
+
+WELLDIMS
+    5   340  1    5  /
+
+-- 5 = number of wells
+-- 340 = total number of completions (4 production wells x 85 layers)
+
+
+UNIFOUT
+
+START
+    1 'FEB' 1967  /
+-- Simulation starts at Feb 1, 1967
+
+NSTACK
+   300  /
+-- 300 = max number of timesteps kept in memory stack
+
+
+
+--      =================================================
+-- In this section, the geometry of the simulation
+-- grid and the rock permeabilities/porosities are
+-- defined.
+--      =================================================
+
+GRID
+
+
+INIT
+
+OLDTRAN   
+ 
+DX
+  1122000*20    /
+DY   
+  1122000*10    / 
+DZ     
+  1122000*2     /
+
+-- Every cell has:
+-- dx = 20 ft
+-- dy = 10 ft
+-- dz = 2 ft
+
+INCLUDE
+   SPE10MODEL2_TOPS.INC  
+/
+-- In the PORO file, all the values equal to 0  have been replaced 
+-- by a minimum by a minimum value (1e-7) in order not to have 'dead cells'.
+
+INCLUDE 
+   'SPE10MODEL2_PHI.INC'
+/
+
+INCLUDE 
+   'SPE10MODEL2_PERM.INC' 
+/
+
+MESSAGES
+   3* 100000  5* 100000 /
+
+
+-- =======================================================
+PROPS
+
+
+--Sw	  Krw     Kro
+SWOF
+
+0.200	0.0000	1.0000  0
+0.250	0.0069	0.8403  0
+0.300	0.0278	0.6944  0
+0.350	0.0625	0.5625  0
+0.400	0.1111	0.4444  0
+0.450	0.1736	0.3403  0
+0.500	0.2500	0.2500  0
+0.550	0.3403	0.1736  0
+0.600	0.4444	0.1111  0
+0.650	0.5625	0.0625  0
+0.700	0.6944	0.0278  0
+0.750	0.8403	0.0069  0
+0.800	1.0000	0.0000  0  /
+
+SWOF table:
+
+-- Sw (water saturation): fraction of pore volume occupied by water (e.g. 0.2 = 20% water)
+-- Initial Sw is 0.2 and increases during water injection.
+
+-- Krw (relative permeability of water): increases with Sw
+
+-- Kro (relative permeability of oil): decreases with Sw
+
+-- As Sw increases: Krw goes up, Kro goes down.
+
+
+
+-- No gas, but table needed because Flo is a 3-phase simulator 
+-- Sgmax is setto 0.8 to have coherent data with SWOF
+-- simplest table has been considered
+
+-- The simulator requires a gas table, so dummy gas data is provided.
+-- Sg             Krg              Kro            Pcgo
+SGOF
+ 0.000000	0		1.000000	0.000000
+ 0.800000	1		0.000000	0.000000   /  
+
+
+-- Oil  Wat   Gas
+DENSITY of each fluid
+   53   64   0.0624  /
+
+PVDO,  Pressure–Volume–Density (Oil)
+It defines how oil properties change with pressure
+
+Pressure (psi)    Bo        Viscosity (cp)
+   300            1.05        2.85  
+   800            1.02        2.99
+   8000           1.01         3
+/
+
+Column 1 — Pressure (psi)
+The reservoir pressure at that point. The table gives three reference points: 
+low pressure (300 psi), medium (800 psi), and high (8000 psi). 
+The simulator interpolates between them for any pressure in between.
+
+Column 2 — Bo (Formation Volume Factor of oil)
+This tells you how much the oil shrinks when it travels from the high-pressure
+ reservoir up to the surface. At 300 psi, Bo = 1.05 means 1 barrel underground 
+ becomes 1.05 barrels at surface — the oil slightly expands as pressure drops. 
+ At 8000 psi, Bo = 1.01 — the oil is compressed underground and barely expands. 
+ The closer Bo is to 1.0, the less the oil changes volume.
+
+Column 3 — Viscosity (cp)
+How thick/sticky the oil is at that pressure. At low pressure (300 psi) the 
+oil is slightly thinner (2.85 cp). At high pressure (8000 psi) it's slightly 
+thicker (3.0 cp). For comparison, water in this model is 0.3 cp — 
+meaning oil is 10× stickier than water, which is why water races through 
+channels while oil moves sluggishly.
+
+PVTW,water at reference pressure 6000 psi, viscosity = 0.3 cp (thin, flows easily).
+Pressure (psi)    Bo      Cw (Water compressibility) Water viscosity in centipoise (cp).Viscosity (cp)
+   6000           1.01       0.000003                     0.3                             0  /
+
+--PVT oif gas for 3-phi simulator flow - MADE UP DATA
+PVDG
+   14.7   178.1   0.005
+   8000   1       0.01
+/
+
+ROCK -  Rock Compressibility
+Reference pressure. Compressibility
+   6000              0.000001 
+/
+
+
+SOLUTION ========================================================
+The reservoir sits at 12,000 ft underground.
+Pressure there is 6,000 psi.
+From 12,000 ft down to 12,170 ft → pure oil (170 ft thick).
+Below 12,170 ft → natural water.
+No gas cap exists.
+Everything starts in perfect equilibrium — nothing is moving yet.
+Then the simulation clock starts and the injection well turns on.
+
+( Starting Conditions)
+EQUIL
+
+--    DATUM  DATUM   OWC    OWC    GOC    GOC    RSVD   RVVD   SOLN
+--    DEPTH  PRESS  DEPTH   PCOW  DEPTH   PCOG  TABLE  TABLE   METH
+
+      12000  6000   12170    0    12000    0     1*      1*      0   /
+-----------------------
+
+      Surface (0 ft)
+     │
+     │
+     │  12,000 ft of rock
+     │
+12,000 ft ◄── DATUM (reference point, pressure here = 6,000 psi)
+     │
+     │  170 ft of reservoir
+     │
+12,170 ft ◄── Oil-Water Contact (OWC), above this point oil and under it water
+-----
+ GOC DEPTH (Gas-Oil Contact),RSVD TABLE (Dissolved Gas Table)
+RVVD TABLE (Vaporised Oil Table), there is no gas
+
+SOLN METH (Solution Method)
+Tells the simulator which mathematical method to use when calculating the initial fluid distribution
+ throughout the reservoir. Zero means the standard method — assume everything is in perfect gravitational
+  equilibrium at the start, with fluids distributed purely based on depth and density. Other values would
+   use more complex initialisation methods, but zero is almost always used.
+SUMMARY ==========================================================
+
+RUNSUM
+
+FPR
+FOPR
+FOPT
+FWPT
+FWCT
+
+WBHP
+   'INJ'
+/
+
+WOPR
+   'P1'
+   'P2'
+   'P3'
+   'P4'
+/
+
+WWCT
+   'P1'
+   'P2'
+   'P3'
+   'P4'
+/
+
+WOPT
+   'P1'
+   'P2'
+   'P3'
+   'P4'
+/
+
+
+SCHEDULE =====================================================
+
+RPTRST
+    'BASIC=2'  /
+
+
+TUNING
+  /
+  /
+  2* 300 1* 12 /
+
+
+WELSPECS — Well definitions
+Well name         X      Y     depth 
+'INJ'    'G1'     30    110    12001    'WATER'  /
+'P1'     'G1'     1      1     12001    'OIL'    /
+'P2'     'G1'     60     1     12001    'OIL'    /
+'P3'     'G1'     60    220    12001    'OIL'    /
+'P4'     'G1'     1     220    12001    'OIL'    /
+/
+FNO relevance — yes. The well locations define your boundary conditions. The injection point (30,110) is where your velocity field originates from.
+
+COMPDAT— Which layers each well is open in
+
+'INJ'    30   110   1   85   'OPEN'   2*   2  /
+'P1'     1    1     1   85   'OPEN'   2*   2  /
+'P2'     60   1     1   85   'OPEN'   2*   2  /
+'P3'     60   220   1   85   'OPEN'   2*   2  /
+'P4'     1    220   1   85   'OPEN'   2*   2  /
+/
+-- All wells are open in layers 1..85. Completion diameter setting is 2 ft.
+
+WCONINJE
+                                    
+'INJ'   'WATER'   'OPEN'   'RESV'   1*   5000    10000 /
+/
+-- INJ injects water at 5000 reservoir bbl/day.
+-- 10000 is a max BHP limit (psi).
+
+
+WCONPROD
+'P1'     'OPEN'    'BHP'   5*   4000 /
+'P2'     'OPEN'    'BHP'   5*   4000 /
+'P3'     'OPEN'    'BHP'   5*   4000 /
+-- Producers are controlled at BHP = 4000 psi.
+
+Injector:
+pushes water in at rate = 5000
+creates pressure in reservoir
+Producers (P1–P4):
+are set to BHP = 4000 psi
+this is a fixed pressure boundary
+flow∝(Preservoir​−Pwell​)
+
+TSTEP
+1 2 3 4 5 5 10 10 20 20 30 30 30 30 50 50 17*100 /
+
+--DATES
+-- $$$ 2  FEB 1967 /
+-- $$$ 3  FEB 1967 /
+-- $$$ 4  FEB 1967 /
+-- $$$ 5  FEB 1967 /
+-- $$$ 15 FEB 1967 /
+-- $$$ 1  MAR 1967 /
+-- $$$ 1  APR 1967 /
+-- $$$ 1  MAY 1967 /
+-- $$$ 1  AUG 1967 /
+-- $$$ 1  NOV 1967 /
+-- $$$ 1  FEB 1968 //
+-- $$$ 1  AUG 1970 /
+-- $$$ 1  NOV 1970 /
+-- $$$ 1  FEB 1971 /
+-- $$$ 1  MAY 1971 /
+-- $$$ 1  AUG 1971 /
+-- $$$ 1  NOV 1971 /
+-- $$$ 1  MAY 1968 /
+-- $$$ 1  AUG 1968 /
+-- $$$ 1  NOV 1968 /
+-- $$$ 1  FEB 1969 /
+-- $$$ 1  MAY 1969 /
+-- $$$ 1  AUG 1969 /
+-- $$$ 1  NOV 1969 /
+-- $$$ 1  FEB 1970 /
+-- $$$ 1  MAY 1970 
+-- $$$ 1  FEB 1972 /
+-- $$$ 1  MAY 1972 /
+-- $$$ 24 JUL 1972 /
+-- $$$ /
+
+END
+

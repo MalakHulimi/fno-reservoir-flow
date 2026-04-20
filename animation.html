@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SPE10 Model 2 – Water Injection</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #0f1117; color: #e0e0e0;
+    padding: 20px;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+  h1  { color: #7eb8f7; font-size: 1.1rem; text-align: center; }
+  .sub { color: #555; font-size: 0.78rem; text-align: center; }
+  canvas { display: block; border-radius: 8px; border: 1px solid #2a3050; }
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
+  button {
+    background: #1a2a45; color: #7eb8f7; border: 1px solid #3a6090;
+    border-radius: 6px; padding: 6px 18px; font-size: 0.82rem; cursor: pointer;
+  }
+  button:hover { background: #243a60; }
+  .stats {
+    display: flex; gap: 20px; font-size: 0.78rem; color: #888;
+    background: #13181f; border: 1px solid #2a3050;
+    border-radius: 8px; padding: 7px 18px; flex-wrap: wrap; justify-content: center;
+  }
+  .stats span { color: #7eb8f7; font-weight: 700; }
+  #btDisp { color: #ff9944; font-weight: 700; display: none; }
+  .legend {
+    display: flex; gap: 14px; flex-wrap: wrap; justify-content: center;
+    font-size: 0.72rem; color: #aaa;
+  }
+  .li { display: flex; align-items: center; gap: 5px; }
+  .sw { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<h1>SPE10 Model 2 — Water Injection Process (Top View, One Layer)</h1>
+<p class="sub">
+  Grid: 60 × 220 cells &nbsp;·&nbsp; INJ at centre cell (30, 110) &nbsp;·&nbsp; P1–P4 at four corners
+</p>
+
+<canvas id="resCanvas" width="530" height="508"></canvas>
+<canvas id="wcCanvas"  width="530" height="128"></canvas>
+
+<div class="controls">
+  <button id="btnPlay">▶ Play</button>
+  <button id="btnReset">↺ Reset</button>
+  <div style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:#888">
+    Speed <input type="range" id="speed" min="1" max="10" value="4"
+                 style="width:90px;accent-color:#7eb8f7">
+  </div>
+</div>
+
+<div class="stats">
+  <div>Time step: <span id="tDisp">0</span></div>
+  <div>Field water cut: <span id="fwcDisp">0.0%</span></div>
+  <div>Swept area: <span id="recDisp">0.0%</span></div>
+  <div id="btDisp">⚠ Breakthrough!</div>
+</div>
+
+<div class="legend">
+  <div class="li"><div class="sw" style="background:#12003a"></div>Tight rock (low perm)</div>
+  <div class="li"><div class="sw" style="background:#ffdd00"></div>Channel (high perm)</div>
+  <div class="li"><div class="sw" style="background:rgba(15,80,215,0.9)"></div>Water (injected)</div>
+  <div class="li"><div class="sw" style="background:rgba(185,95,10,0.75)"></div>Oil (displaced)</div>
+  <div class="li"><div class="sw" style="background:#22ee66;border-radius:50%"></div>INJ — injection well</div>
+  <div class="li"><div class="sw" style="background:#ff4455;border-radius:50%"></div>P1–P4 — production wells</div>
+</div>
+
+<script>
+// ── Grid constants ─────────────────────────────────────────────────
+// Matches SPE10 MODEL2: 60×220 cells, INJ at (30,110) 1-based = (29,109) 0-based
+const NX = 60, NY = 220;
+const CW = 7, CH = 2;       // pixels per cell
+const OX = 44, OY = 14;     // canvas left / top offset
+
+// Wells — 0-based indices from WELSPECS in .DATA file
+const INJ  = { x: 29, y: 109 };
+const PROD = [
+  { name:'P1', x: 0,  y: 0,   col:'#ff6644' },  // corner (1,  1)   in .DATA
+  { name:'P2', x: 59, y: 0,   col:'#ffaa00' },  // corner (60, 1)
+  { name:'P3', x: 59, y: 219, col:'#cc55ff' },  // corner (60,220)
+  { name:'P4', x: 0,  y: 219, col:'#33ddff' },  // corner (1, 220)
+];
+
+const resC = document.getElementById('resCanvas');
+const wcC  = document.getElementById('wcCanvas');
+const rc   = resC.getContext('2d');
+const wc   = wcC.getContext('2d');
+
+// ── Permeability field (Upper Ness style channels) ─────────────────
+function genPerm() {
+  const k = Array.from({length: NY}, () => new Float32Array(NX));
+
+  // Very low background (tight rock)
+  for (let y = 0; y < NY; y++)
+    for (let x = 0; x < NX; x++)
+      k[y][x] = 0.001 + Math.random() * 0.012;
+
+  // Add 12 horizontal channel streaks with waviness and random pinch-outs
+  for (let c = 0; c < 12; c++) {
+    const cy  = Math.floor(Math.random() * NY);
+    const th  = 1 + Math.floor(Math.random() * 3);
+    const kv  = 0.72 + Math.random() * 0.28;
+    const ph  = Math.random() * Math.PI * 2;
+    const px  = Math.floor(Math.random() * NX * 0.45);  // pinch-out start
+    const pw  = 3 + Math.floor(Math.random() * 9);       // pinch-out width
+
+    for (let x = 0; x < NX; x++) {
+      const pinched = (x >= px && x < px + pw);
+      const wave    = Math.round(Math.sin(x * 0.13 + ph) * 3.5);
+      for (let dy = -th; dy <= th; dy++) {
+        const ry = cy + wave + dy;
+        if (ry < 0 || ry >= NY) continue;
+        if (pinched) { k[ry][x] = Math.max(k[ry][x], 0.025 + Math.random()*0.04); continue; }
+        const f = 1 - Math.abs(dy) / (th + 1);
+        k[ry][x] = Math.max(k[ry][x], kv * f * (0.87 + Math.random() * 0.13));
+      }
+    }
+  }
+  return k;
+}
+
+// Inferno-inspired colour map: near-black purple → blue → cyan → yellow
+function permRGB(k) {
+  const t = Math.pow(Math.min(1, k), 0.38);
+  let r, g, b;
+  if (t < 0.25) {
+    const s = t/0.25;
+    r = Math.round(18 + s*10); g = 0; b = Math.round(48+s*120);
+  } else if (t < 0.5) {
+    const s = (t-0.25)/0.25;
+    r = 0; g = Math.round(s*145); b = Math.round(168+s*55);
+  } else if (t < 0.75) {
+    const s = (t-0.5)/0.25;
+    r = Math.round(s*222); g = Math.round(145+s*78); b = Math.round(223-s*198);
+  } else {
+    const s = (t-0.75)/0.25;
+    r = 222; g = Math.round(223+s*32); b = Math.round(25-s*25);
+  }
+  return [
+    Math.max(0, Math.min(255, r)),
+    Math.max(0, Math.min(255, g)),
+    Math.max(0, Math.min(255, b)),
+  ];
+}
+
+let perm = genPerm();
+
+function buildBg() {
+  const img = rc.createImageData(NX*CW, NY*CH);
+  const d = img.data;
+  for (let y = 0; y < NY; y++) {
+    for (let x = 0; x < NX; x++) {
+      const [r,g,b] = permRGB(perm[y][x]);
+      for (let cy = 0; cy < CH; cy++) {
+        for (let cx = 0; cx < CW; cx++) {
+          const i = ((y*CH+cy)*NX*CW + (x*CW+cx)) * 4;
+          d[i]=r; d[i+1]=g; d[i+2]=b; d[i+3]=255;
+        }
+      }
+    }
+  }
+  return img;
+}
+let bgImg = buildBg();
+
+// ── Simulation state ───────────────────────────────────────────────
+let sw, t, playing, breakthrough, wcHist, animId;
+
+function initSim() {
+  sw = Array.from({length: NY}, () => new Float32Array(NX));
+  sw[INJ.y][INJ.x] = 1.0;
+  t = 0; playing = false; breakthrough = false;
+  wcHist = PROD.map(() => []);
+  document.getElementById('btDisp').style.display = 'none';
+  document.getElementById('btnPlay').textContent  = '▶ Play';
+  document.getElementById('tDisp').textContent    = '0';
+  document.getElementById('fwcDisp').textContent  = '0.0%';
+  document.getElementById('recDisp').textContent  = '0.0%';
+}
+
+// One simulation step — simplified Darcy-like advection from injector outward
+function step() {
+  const spd = +document.getElementById('speed').value;
+  const dt  = spd * 0.0016;
+  const ns  = sw.map(r => r.slice());
+
+  for (let y = 0; y < NY; y++) {
+    for (let x = 0; x < NX; x++) {
+      // Max water saturation among 4 neighbours
+      let maxN = 0;
+      if (y > 0)    maxN = Math.max(maxN, sw[y-1][x]);
+      if (y < NY-1) maxN = Math.max(maxN, sw[y+1][x]);
+      if (x > 0)    maxN = Math.max(maxN, sw[y][x-1]);
+      if (x < NX-1) maxN = Math.max(maxN, sw[y][x+1]);
+
+      if (maxN > 0.04)
+        ns[y][x] = Math.min(1.0, ns[y][x] + perm[y][x] * dt * maxN * 2.8);
+    }
+  }
+
+  ns[INJ.y][INJ.x] = 1.0;  // injector always at full water saturation
+  sw = ns;
+  t++;
+
+  // Record water cut at each corner production well
+  let anyBT = false;
+  for (let i = 0; i < PROD.length; i++) {
+    const wc_val = sw[PROD[i].y][PROD[i].x];
+    wcHist[i].push(wc_val);
+    if (wc_val > 0.04) anyBT = true;
+  }
+  if (!breakthrough && anyBT) {
+    breakthrough = true;
+    document.getElementById('btDisp').style.display = 'inline';
+  }
+
+  // Field water cut = mean of four producers
+  const fwc = PROD.reduce((s,p) => s + sw[p.y][p.x], 0) / PROD.length;
+
+  // Swept area = fraction of cells with Sw > 0.5
+  let swept = 0;
+  for (let y = 0; y < NY; y++)
+    for (let x = 0; x < NX; x++)
+      if (sw[y][x] > 0.5) swept++;
+
+  document.getElementById('tDisp').textContent   = t;
+  document.getElementById('fwcDisp').textContent = (fwc*100).toFixed(1)+'%';
+  document.getElementById('recDisp').textContent = (swept/(NX*NY)*100).toFixed(1)+'%';
+}
+
+// ── Draw reservoir canvas ─────────────────────────────────────────
+function cellPx(gx, gy) {
+  return { px: OX + gx*CW + CW/2, py: OY + gy*CH + CH/2 };
+}
+
+function drawReservoir() {
+  rc.fillStyle = '#0d1018';
+  rc.fillRect(0, 0, resC.width, resC.height);
+
+  // 1. Permeability background
+  rc.putImageData(bgImg, OX, OY);
+
+  // 2. Oil tint (amber) over unswept cells
+  for (let y = 0; y < NY; y++) {
+    for (let x = 0; x < NX; x++) {
+      const s = sw[y][x];
+      if (s < 0.98) {
+        rc.fillStyle = `rgba(165,78,8,${(1-s)*0.28})`;
+        rc.fillRect(OX+x*CW, OY+y*CH, CW, CH);
+      }
+    }
+  }
+
+  // 3. Water overlay (blue, alpha = Sw)
+  for (let y = 0; y < NY; y++) {
+    for (let x = 0; x < NX; x++) {
+      const s = sw[y][x];
+      if (s > 0.02) {
+        rc.fillStyle = `rgba(12,75,208,${s*0.78})`;
+        rc.fillRect(OX+x*CW, OY+y*CH, CW, CH);
+      }
+    }
+  }
+
+  // 4. Grid boundary
+  rc.strokeStyle = '#2a3050'; rc.lineWidth = 1;
+  rc.strokeRect(OX, OY, NX*CW, NY*CH);
+
+  // 5. Tarbert / Upper Ness boundary (layer 35 of 85 = 41.2% of Y depth)
+  const bndY = OY + Math.round((35/85) * NY) * CH;
+  rc.strokeStyle = 'rgba(255,255,255,0.18)'; rc.lineWidth = 1;
+  rc.setLineDash([5,5]);
+  rc.beginPath(); rc.moveTo(OX, bndY); rc.lineTo(OX+NX*CW, bndY); rc.stroke();
+  rc.setLineDash([]);
+
+  // Formation labels (right margin)
+  const rx = OX + NX*CW + 4;
+  rc.font = '8px sans-serif'; rc.textAlign = 'left';
+  rc.fillStyle = 'rgba(125,212,248,0.55)';
+  rc.fillText('Tarbert', rx, OY + 10);
+  rc.fillStyle = 'rgba(240,170,96,0.55)';
+  rc.fillText('Upper', rx, bndY + 10);
+  rc.fillText('Ness',  rx, bndY + 20);
+
+  // 6. Production wells at corners
+  for (const p of PROD) {
+    const {px,py} = cellPx(p.x, p.y);
+    rc.beginPath(); rc.arc(px, py, 6, 0, Math.PI*2);
+    rc.fillStyle = p.col; rc.fill();
+    rc.strokeStyle = 'rgba(255,255,255,0.3)'; rc.lineWidth = 1; rc.stroke();
+    // name label
+    rc.fillStyle = p.col; rc.font = 'bold 8px monospace'; rc.textAlign = 'center';
+    const lx = p.x < 5 ? px - 14 : px + 14;
+    const ly = p.y < 5 ? py - 10  : py + 16;
+    rc.fillText(p.name, lx, ly);
+  }
+
+  // 7. Injection well at centre — pulsing ring
+  const {px:ix, py:iy} = cellPx(INJ.x, INJ.y);
+  const pulse = 0.5 + 0.5 * Math.sin(t * 0.18);
+  rc.beginPath();
+  rc.arc(ix, iy, 8 + pulse*4, 0, Math.PI*2);
+  rc.strokeStyle = `rgba(34,238,102,${0.25 + pulse*0.35})`; rc.lineWidth = 1.5; rc.stroke();
+  rc.beginPath(); rc.arc(ix, iy, 5, 0, Math.PI*2);
+  rc.fillStyle = '#22ee66'; rc.fill();
+  rc.strokeStyle = 'rgba(255,255,255,0.3)'; rc.lineWidth = 1; rc.stroke();
+  rc.fillStyle = '#22ee66'; rc.font = 'bold 8px monospace'; rc.textAlign = 'center';
+  rc.fillText('INJ', ix, iy - 11);
+
+  // 8. Axis labels
+  rc.fillStyle = '#3a4060'; rc.font = '9px sans-serif'; rc.textAlign = 'center';
+  rc.fillText('X  (60 cells = 1,200 ft)', OX + NX*CW/2, OY + NY*CH + 14);
+  rc.save();
+  rc.translate(11, OY + NY*CH/2);
+  rc.rotate(-Math.PI/2);
+  rc.fillText('Y  (220 cells = 2,200 ft)', 0, 0);
+  rc.restore();
+}
+
+// ── Draw water-cut graph ──────────────────────────────────────────
+function drawWCGraph() {
+  const W = wcC.width, H = wcC.height;
+  const PL=50, PR=14, PT=16, PB=28;
+  const gW = W-PL-PR, gH = H-PT-PB;
+
+  wc.fillStyle = '#0d1018'; wc.fillRect(0,0,W,H);
+  wc.strokeStyle = '#2a3050'; wc.lineWidth = 1;
+  wc.strokeRect(PL,PT,gW,gH);
+
+  // Horizontal grid lines
+  wc.strokeStyle = '#181e28';
+  for (let i=1; i<4; i++) {
+    const y = PT + gH*(1-i*0.25);
+    wc.beginPath(); wc.moveTo(PL,y); wc.lineTo(PL+gW,y); wc.stroke();
+  }
+
+  // Y-axis labels
+  wc.fillStyle = '#3a4060'; wc.font='9px monospace'; wc.textAlign='right';
+  for (let i=0; i<=4; i++)
+    wc.fillText(i*25+'%', PL-3, PT+gH*(1-i*0.25)+3);
+
+  wc.fillStyle = '#3a4060'; wc.font='9px sans-serif'; wc.textAlign='center';
+  wc.fillText('Water Cut at Each Production Well  (P1–P4)', PL+gW/2, PT-4);
+
+  const maxLen = Math.max(...wcHist.map(h=>h.length), 2);
+
+  for (let i = 0; i < PROD.length; i++) {
+    const hist = wcHist[i];
+    if (hist.length < 2) continue;
+    wc.beginPath();
+    wc.strokeStyle = PROD[i].col; wc.lineWidth = 1.5;
+    for (let j=0; j<hist.length; j++) {
+      const x = PL + (j/(maxLen-1))*gW;
+      const y = PT + gH*(1-Math.min(1, hist[j]));
+      j===0 ? wc.moveTo(x,y) : wc.lineTo(x,y);
+    }
+    wc.stroke();
+  }
+
+  // Bottom legend
+  for (let i=0; i<PROD.length; i++) {
+    const lx = PL + 8 + i*62;
+    wc.fillStyle = PROD[i].col;
+    wc.fillRect(lx, PT+gH+9, 14, 2);
+    wc.font='8px monospace'; wc.textAlign='left';
+    wc.fillText(PROD[i].name, lx+17, PT+gH+13);
+  }
+}
+
+// ── Animation loop ─────────────────────────────────────────────────
+function loop() {
+  if (!playing) return;
+  const spd = +document.getElementById('speed').value;
+  for (let i=0; i < Math.ceil(spd*0.7); i++) step();
+  drawReservoir();
+  drawWCGraph();
+  animId = requestAnimationFrame(loop);
+}
+
+document.getElementById('btnPlay').addEventListener('click', () => {
+  playing = !playing;
+  document.getElementById('btnPlay').textContent = playing ? '⏸ Pause' : '▶ Play';
+  if (playing) loop();
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  playing = false; cancelAnimationFrame(animId);
+  perm = genPerm(); bgImg = buildBg();
+  initSim(); drawReservoir(); drawWCGraph();
+});
+
+// ── Init ───────────────────────────────────────────────────────────
+initSim(); drawReservoir(); drawWCGraph();
+</script>
+</body>
+</html>

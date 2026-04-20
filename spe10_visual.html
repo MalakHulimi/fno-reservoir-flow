@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SPE10 Model 2 – Grid Explained</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e0e0e0; padding: 30px; }
+  h1 { text-align: center; font-size: 1.4rem; color: #7eb8f7; margin-bottom: 6px; }
+  .subtitle { text-align: center; color: #888; font-size: 0.85rem; margin-bottom: 30px; }
+
+  .layout { display: flex; gap: 30px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+
+  /* ── 3-D box ── */
+  .box-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .box-wrap h2 { font-size: 0.9rem; color: #aaa; letter-spacing: .05em; text-transform: uppercase; }
+
+  .scene { width: 260px; height: 320px; perspective: 700px; }
+  .cube {
+    width: 160px; height: 220px;
+    position: relative; margin: 40px auto 0;
+    transform-style: preserve-3d;
+    transform: rotateX(20deg) rotateY(-30deg);
+  }
+
+  /* faces */
+  .face { position: absolute; border: 1px solid #444; }
+
+  /* front */
+  .front  { width:160px; height:220px; left:0; top:0;
+            background: linear-gradient(to bottom,
+              #3a7ca5 0%, #3a7ca5 45%,   /* Tarbert – blue */
+              #c46b2d 45%, #c46b2d 100%  /* Upper Ness – orange */
+            );
+            opacity:.85; transform: translateZ(50px); }
+
+  /* back */
+  .back   { width:160px; height:220px; left:0; top:0;
+            background:#1a2a3a; opacity:.6;
+            transform: rotateY(180deg) translateZ(50px); }
+
+  /* right */
+  .right  { width:100px; height:220px; left:160px; top:0;
+            background: linear-gradient(to bottom,
+              #2e6080 0%, #2e6080 45%,
+              #9e5020 45%, #9e5020 100%
+            );
+            opacity:.75;
+            transform: rotateY(90deg) translateZ(110px) translateX(-50px); }
+
+  /* top */
+  .top    { width:160px; height:100px; left:0; top:-100px;
+            background:#3a5f7a; opacity:.7;
+            transform: rotateX(90deg) translateZ(120px) translateY(0px); }
+
+  /* grid lines on front face */
+  .grid-front {
+    position: absolute; width:160px; height:220px; left:0; top:0;
+    transform: translateZ(51px);
+    background-image:
+      repeating-linear-gradient(to right,  rgba(255,255,255,.07) 0, rgba(255,255,255,.07) 1px, transparent 1px, transparent calc(160px/10)),
+      repeating-linear-gradient(to bottom, rgba(255,255,255,.07) 0, rgba(255,255,255,.07) 1px, transparent 1px, transparent calc(220px/14));
+  }
+
+  /* divider line (Tarbert / Upper Ness boundary) */
+  .divider {
+    position: absolute; width: 160px; height: 2px; background: #fff;
+    left:0; top: calc(220px * 0.45); /* 45% = 35/85 ≈ 41%... use 45 for visual */
+    transform: translateZ(52px);
+    box-shadow: 0 0 6px #fff;
+  }
+
+  /* annotations on cube */
+  .ann { position: absolute; font-size: 0.7rem; color: #fff; white-space: nowrap; transform: translateZ(52px); }
+  .ann-tarbert  { top: 12%;  left: 50%; transform: translateX(-50%) translateZ(52px); color:#7dd4f8; font-weight:600; }
+  .ann-upper    { top: 68%;  left: 50%; transform: translateX(-50%) translateZ(52px); color:#f0aa60; font-weight:600; }
+
+  /* ── Axis triad (SVG canvas below cube) ── */
+  .axis-triad { margin-top: 6px; }
+
+  /* dimension arrows */
+  .dims { margin-top: 6px; font-size: 0.75rem; color: #aaa; text-align: center; line-height: 1.8; }
+  .dims span { color: #7eb8f7; font-weight: 600; }
+
+  /* ── Layers breakdown ── */
+  .layers-wrap { display: flex; flex-direction: column; gap: 10px; min-width: 220px; }
+  .layers-wrap h2 { font-size: 0.9rem; color: #aaa; letter-spacing:.05em; text-transform: uppercase; margin-bottom:4px; }
+
+  .layer-bar { border-radius: 6px; padding: 10px 14px; position: relative; }
+  .tarbert   { background: linear-gradient(135deg, #1e4d6b, #3a7ca5); border-left: 4px solid #7dd4f8; }
+  .upperness { background: linear-gradient(135deg, #5c2e0a, #c46b2d); border-left: 4px solid #f0aa60; }
+
+  .layer-bar .name  { font-weight: 700; font-size: 0.95rem; }
+  .layer-bar .sub   { font-size: 0.75rem; color: rgba(255,255,255,.7); margin-top: 3px; }
+  .layer-bar .badge {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    background: rgba(255,255,255,.15); border-radius: 20px;
+    padding: 3px 10px; font-size: 0.75rem; font-weight: 600;
+  }
+
+  /* proportion bar */
+  .prop-bar { width: 100%; height: 14px; border-radius: 7px; overflow: hidden; display: flex; margin-top: 4px; }
+  .prop-t { background: #3a7ca5; flex: 35; }
+  .prop-u { background: #c46b2d; flex: 50; }
+  .prop-label { display: flex; justify-content: space-between; font-size: 0.7rem; color:#aaa; margin-top:3px; }
+
+  /* ── Cell size card ── */
+  .cell-card {
+    background: #1a1f2e; border: 1px solid #2a3050; border-radius: 10px;
+    padding: 16px 20px; min-width: 220px;
+  }
+  .cell-card h2 { font-size: 0.9rem; color: #aaa; letter-spacing:.05em; text-transform: uppercase; margin-bottom: 12px; }
+
+  .cell-vis { display: flex; justify-content: center; margin-bottom: 12px; }
+  .cell-3d {
+    width: 80px; height: 40px; background: #2a4a6a;
+    border: 2px solid #5a8ab0; border-radius: 3px;
+    position: relative; display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem; color: #7dd4f8; font-weight: 600;
+  }
+  .cell-3d::after {
+    content: ''; position: absolute;
+    top: -10px; right: -10px; width: 20px; height: 40px;
+    background: #1e3a55; border: 2px solid #4a7a9b;
+    transform: skewY(-45deg);
+    border-radius: 0 3px 3px 0;
+  }
+  .cell-3d::before {
+    content: ''; position: absolute;
+    top: -10px; left: 0; width: 80px; height: 10px;
+    background: #3a5f7a; border: 2px solid #5a8ab0;
+    transform: skewX(-45deg);
+    border-radius: 3px 3px 0 0;
+  }
+
+  .dim-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #222; font-size: 0.82rem; }
+  .dim-row:last-child { border-bottom: none; }
+  .dim-label { color: #888; }
+  .dim-val   { color: #7eb8f7; font-weight: 600; }
+
+  /* ── Total summary ── */
+  .summary {
+    width: 100%; background: #1a1f2e; border: 1px solid #2a3050;
+    border-radius: 10px; padding: 16px 24px; margin-top: 20px;
+    display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-around;
+  }
+  .stat { text-align: center; }
+  .stat .val { font-size: 1.5rem; font-weight: 700; color: #7eb8f7; }
+  .stat .lbl { font-size: 0.72rem; color: #888; margin-top: 2px; }
+
+  .formula {
+    width: 100%; text-align: center; font-size: 0.8rem; color: #666;
+    margin-top: 12px; font-family: monospace;
+  }
+  .formula span { color: #7eb8f7; }
+</style>
+</head>
+<body>
+
+<h1>SPE10 Model 2 — Grid Structure Explained</h1>
+<p class="subtitle">Christie & Blunt (2001) · SPE Comparative Solution Project · Problem 2</p>
+
+<div class="layout">
+
+  <!-- 3D box -->
+  <div class="box-wrap">
+    <h2>3D Reservoir Block</h2>
+    <div class="scene">
+      <div class="cube">
+        <div class="face back"></div>
+        <div class="face right"></div>
+        <div class="face top"></div>
+        <div class="face front"></div>
+        <div class="grid-front"></div>
+        <div class="divider"></div>
+        <div class="ann ann-tarbert">Tarbert</div>
+        <div class="ann ann-upper">Upper Ness</div>
+      </div>
+    </div>
+    <!-- Axis triad SVG -->
+    <div class="axis-triad">
+      <svg width="160" height="130" viewBox="0 0 160 130" xmlns="http://www.w3.org/2000/svg">
+        <!-- background -->
+        <rect width="160" height="130" rx="8" fill="#13181f" stroke="#2a3050" stroke-width="1"/>
+
+        <!-- origin dot -->
+        <circle cx="62" cy="78" r="4" fill="#ffffff"/>
+
+        <!-- X axis arrow (goes right → east) -->
+        <line x1="62" y1="78" x2="128" y2="78" stroke="#ff4d4d" stroke-width="2.5" stroke-linecap="round"/>
+        <polygon points="128,78 120,73 120,83" fill="#ff4d4d"/>
+        <!-- X label -->
+        <text x="136" y="82" fill="#ff4d4d" font-size="13" font-weight="700" font-family="monospace">X</text>
+        <text x="88" y="72" fill="#ff7777" font-size="9" font-family="sans-serif">60 cells · 20 ft each</text>
+        <text x="88" y="93" fill="#ff7777" font-size="9" font-family="sans-serif">vx direction →</text>
+
+        <!-- Y axis arrow (goes upper-right → isometric depth) -->
+        <line x1="62" y1="78" x2="110" y2="46" stroke="#4ddd88" stroke-width="2.5" stroke-linecap="round"/>
+        <polygon points="110,46 100,48 106,57" fill="#4ddd88"/>
+        <!-- Y label -->
+        <text x="114" y="44" fill="#4ddd88" font-size="13" font-weight="700" font-family="monospace">Y</text>
+        <text x="68" y="38" fill="#77ddaa" font-size="9" font-family="sans-serif">220 cells · 10 ft each</text>
+        <text x="68" y="49" fill="#77ddaa" font-size="9" font-family="sans-serif">vy direction ↗</text>
+
+        <!-- Z axis arrow (goes straight up = depth underground) -->
+        <line x1="62" y1="78" x2="62" y2="16" stroke="#7eb8f7" stroke-width="2.5" stroke-linecap="round"/>
+        <polygon points="62,16 57,24 67,24" fill="#7eb8f7"/>
+        <!-- Z label -->
+        <text x="55" y="12" fill="#7eb8f7" font-size="13" font-weight="700" font-family="monospace">Z</text>
+        <text x="10" y="30" fill="#aad4f5" font-size="9" font-family="sans-serif">85 layers · 2 ft each</text>
+        <text x="10" y="41" fill="#aad4f5" font-size="9" font-family="sans-serif">↑ depth (underground)</text>
+
+        <!-- legend title -->
+        <text x="80" y="118" fill="#555" font-size="9" font-family="sans-serif" text-anchor="middle">Axis orientation · not to scale</text>
+      </svg>
+    </div>
+
+    <div class="dims">
+      <div>X → <span>1,200 ft</span> wide &nbsp;(60 cells × 20 ft)</div>
+      <div>Y ↗ <span>2,200 ft</span> deep &nbsp;(220 cells × 10 ft)</div>
+      <div>Z ↑ <span>170 ft</span> thick &nbsp;(85 layers × 2 ft)</div>
+    </div>
+  </div>
+
+  <!-- Layers breakdown -->
+  <div class="layers-wrap">
+    <h2>Vertical Layers (Z)</h2>
+
+    <div class="layer-bar tarbert">
+      <div class="name">Tarbert Formation</div>
+      <div class="sub">Fluvial (river deposits)<br>Moderate heterogeneity · Smoother flow</div>
+      <div class="badge">Layers 1–35</div>
+    </div>
+
+    <div class="layer-bar upperness">
+      <div class="name">Upper Ness Formation</div>
+      <div class="sub">Deltaic deposits<br>Extreme heterogeneity · Channelized flow</div>
+      <div class="badge">Layers 36–85</div>
+    </div>
+
+    <div style="padding: 8px 0;">
+      <div class="prop-bar"><div class="prop-t"></div><div class="prop-u"></div></div>
+      <div class="prop-label"><span>Tarbert 35 layers · 70 ft</span><span>Upper Ness 50 layers · 100 ft</span></div>
+    </div>
+
+    <div style="font-size:0.78rem; color:#888; line-height:1.7; background:#1a1f2e; border-radius:8px; padding:12px 14px; border:1px solid #2a3050;">
+      <div>📌 Each layer = one <strong style="color:#7dd4f8">60×220 grid</strong> = your FNO input</div>
+      <div>📌 85 layers = <strong style="color:#7dd4f8">85 independent 2D samples</strong></div>
+      <div>📌 Start training on <strong style="color:#3a7ca5">Tarbert</strong> (simpler)</div>
+      <div>📌 Test generalization on <strong style="color:#c46b2d">Upper Ness</strong> (harder)</div>
+    </div>
+  </div>
+
+  <!-- Cell size -->
+  <div class="cell-card">
+    <h2>Single Cell Size</h2>
+    <div class="cell-vis">
+      <div class="cell-3d">20 × 10 ft</div>
+    </div>
+    <div class="dim-row"><span class="dim-label">X (width)</span><span class="dim-val">20 ft</span></div>
+    <div class="dim-row"><span class="dim-label">Y (length)</span><span class="dim-val">10 ft</span></div>
+    <div class="dim-row"><span class="dim-label">Z (height)</span><span class="dim-val">2 ft</span></div>
+    <div class="dim-row"><span class="dim-label">Depth of top</span><span class="dim-val">12,000 ft</span></div>
+    <div class="dim-row"><span class="dim-label">Total cells (X)</span><span class="dim-val">60</span></div>
+    <div class="dim-row"><span class="dim-label">Total cells (Y)</span><span class="dim-val">220</span></div>
+    <div class="dim-row"><span class="dim-label">Total layers (Z)</span><span class="dim-val">85</span></div>
+  </div>
+
+</div>
+
+<!-- Summary row -->
+<div class="summary">
+  <div class="stat"><div class="val">60×220</div><div class="lbl">Grid per 2D layer (your FNO domain)</div></div>
+  <div class="stat"><div class="val">85</div><div class="lbl">Total vertical layers</div></div>
+  <div class="stat"><div class="val">1.122 M</div><div class="lbl">Total fine-scale cells</div></div>
+  <div class="stat"><div class="val">170 ft</div><div class="lbl">Total reservoir thickness</div></div>
+  <div class="stat"><div class="val">~0 – 10K mD</div><div class="lbl">Permeability range</div></div>
+</div>
+
+<div class="formula">
+  Total cells: <span>60</span> × <span>220</span> × <span>85</span> = <span>1,122,000</span> &nbsp;|&nbsp;
+  Physical size: <span>1,200 ft</span> × <span>2,200 ft</span> × <span>170 ft</span>
+</div>
+
+</body>
+</html>
